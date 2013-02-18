@@ -1,0 +1,5 @@
+name = Banner Blocks
+description = Provided Slide entity type and management views, and determines which slide(s) to show based on current path.
+core = 7.x
+version = 7.x-1.0-beta1
+package = Top Floor Tech

@@ -1,0 +1,177 @@
+<?php
+
+/**
+ * @return mixed
+ */
+function banner_blocks_block_info() {
+  $blocks['banner_blocks_slideshow'] = array(
+    'info' => t('Header slideshow'),
+    'cache' => DRUPAL_CACHE_PER_PAGE,
+  );
+
+  $blocks['banner_blocks_banner'] = array(
+    'info' => t('Header banner'),
+    'cache' => DRUPAL_CACHE_PER_PAGE,
+  );
+
+  return $blocks;
+}
+
+/**
+ * @param string $delta
+ * @return array
+ */
+function banner_blocks_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'banner_blocks_slideshow':
+      $block['subject'] = t('Header slideshow');
+      $block['content'] = banner_blocks_block_content_slideshow();
+      break;
+    case 'banner_blocks_banner':
+      $block['subject'] = t('Header banner');
+      $block['content'] = banner_blocks_block_content_banner();
+      break;
+  }
+
+  return $block;
+}
+
+/**
+ * @return mixed
+ */
+function banner_blocks_block_content_slideshow() {
+  $ids = banner_blocks_get_active_slide_ids();
+
+  $ids = implode(',', $ids);
+
+  $view = views_get_view('header_slideshow');
+  $view->set_display('default');
+  $view->set_arguments(array($ids));
+  $view->pre_execute();
+  $view->execute();
+
+  return $view->render();
+}
+
+function banner_blocks_block_content_banner() {
+  $banner = banner_blocks_get_active_banner();
+
+  if (empty($banner)) {
+    return '';
+  }
+
+  $rendered_entity = drupal_render(entity_view('banner', array($banner->id => $banner), 'default'));
+
+  return $rendered_entity;
+}
+
+/**
+ * @return array
+ */
+function banner_blocks_get_active_slide_ids() {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'slide')
+    ->entityCondition('bundle', 'header_slide');
+
+  $result = $query->execute();
+
+  if (empty($result['slide'])) {
+    return array();
+  }
+
+  $slides = entity_load('slide', array_keys($result['slide']));
+
+  $active_ids = array();
+
+  foreach ($slides as $eid => $slide) {
+    /*
+     * @var array $paths
+     */
+    $paths = field_get_items('slide', $slide, 'field_paths');
+    $paths = explode("\n", $paths[0]['value']);
+
+    $current_path = drupal_strtolower(drupal_get_path_alias($_GET['q']));
+
+    $specificity = 0;
+    foreach ($paths as $pattern) {
+      $pattern = trim($pattern);
+      $exclude = (substr($pattern, 0, 1) == '~');
+
+      if ($exclude) {
+        $pattern = substr($pattern, 1);
+      }
+
+      $path = $current_path;
+      // Compare the lowercase internal and lowercase path alias (if any).
+      $page_match = drupal_match_path($path, $pattern);
+
+      if ($path != $_GET['q']) {
+        $page_match = $page_match || drupal_match_path($_GET['q'], $pattern);
+      }
+
+      if (!$page_match) {
+        continue;
+      }
+
+      $wildcard_position = strrpos($pattern, '*');
+
+      if ($wildcard_position >= $specificity || $wildcard_position === FALSE) {
+        $active_ids[$eid] = !$exclude;
+      }
+
+      if ($wildcard_position === false) {
+        break;
+      } else {
+        $specificity = $wildcard_position;
+      }
+    }
+  }
+
+  return array_keys(array_filter($active_ids));
+}
+
+function banner_blocks_get_active_banner() {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'banner')
+    ->entityCondition('bundle', 'banner');
+
+  $result = $query->execute();
+
+  if (empty($result['banner'])) {
+    return null;
+  }
+
+  $banners = entity_load('banner', array_keys($result['banner']));
+
+  $active_banner = array();
+  $min = 0;
+
+  foreach ($banners as $eid => $banner) {
+    $paths = field_get_items('banner', $banner, 'field_paths');
+
+    $paths = explode("\n", $paths[0]['safe_value']);
+
+    foreach ($paths as $path) {
+      $path = $path['safe_value'];
+
+      if (!drupal_match_path(drupal_get_path_alias(), $path)) {
+        continue;
+      }
+
+      $num = strrpos($path, '*');
+
+      if ($num === FALSE) {
+        return $banner;
+      }
+
+      if ($num >= $min) {
+        $min = $num;
+        $active_banner = $banner;
+      }
+    }
+  }
+
+  return $active_banner;
+}
