@@ -1,0 +1,132 @@
+<?php
+
+function banner_blocks_install() {
+  if (!banner_blocks_entity_type_exists()) {
+    banner_blocks_create_entity_type('banner');
+
+    banner_blocks_create_bundles('banner');
+  }
+}
+
+function banner_blocks_uninstall() {
+  if (banner_blocks_entity_type_exists()) {
+    banner_blocks_delete_fields('banner');
+
+    banner_blocks_delete_bundles('banner');
+
+    banner_blocks_delete_entity_type('banner');
+  }
+}
+
+function banner_blocks_entity_type_exists() {
+  $entity_types = EntityType::loadAll();
+
+  foreach ($entity_types as $entity_type) {
+    if ($entity_type->name == 'banner') {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+function banner_blocks_delete_entity_type($machine_name = 'banner') {
+  $entity_type = EntityType::loadByName($machine_name);
+
+  if ($entity_type->name == $machine_name) {
+    $entity_type->delete();
+  }
+}
+
+function banner_blocks_delete_bundles($entity_type_machine_name = 'banner') {
+  $bundles = Bundle::loadByEntityType($entity_type_machine_name);
+
+  foreach ($bundles as $bundle) {
+    /** @var $bundle Bundle */
+    $bundle->delete();
+  }
+}
+
+function banner_blocks_create_entity_type($machine_name = 'banner') {
+  $entity_type = new EntityType();
+
+  $entity_type->name = $machine_name;
+  $entity_type->label = "Banner";
+
+  $properties = array(
+    'title' => array(
+      'name' => 'Title',
+      'type' => 'text',
+      'behavior' => 'title',
+    ),
+    'uid' => array(
+      'name' => 'Author',
+      'type' => 'integer',
+      'behavior' => 'author',
+    ),
+    'created' => array(
+      'name' => 'Created',
+      'type' => 'integer',
+      'behavior' => 'created',
+    ),
+    'changed' => array(
+      'name' => 'Changed',
+      'type' => 'integer',
+      'behavior' => 'changed',
+    )
+  );
+
+  foreach ($properties as $name => $options) {
+    $entity_type->addProperty($name, $options['name'], $options['type'], $options['behavior']);
+  }
+
+  $entity_type->save();
+}
+
+function banner_blocks_create_bundles($entity_type_machine_name = 'banner') {
+  $bundles = array('slide_tall', 'slide_short', 'banner_tall', 'banner_short');
+
+  $fields = array(
+    array(
+      'field_type' => 'text_long',
+      'options' => array(
+        'use existing' => true,
+        'field' => array(
+          'field_name' => 'field_paths',
+          'type' => 'text_long',
+        ),
+        'instance' => array(
+          'label' => 'Paths',
+        ),
+      ),
+    )
+  );
+
+  foreach ($bundles as $bundle_name) {
+    $bundle = new Bundle();
+
+    $bundle->entity_type = $entity_type_machine_name;
+    $bundle->name = $bundle_name;
+
+    foreach ($fields as $field_definition) {
+      $bundle->addField($field_definition['field_type'], $field_definition['options']);
+    }
+
+    $bundle->save();
+  }
+}
+
+function banner_blocks_delete_fields($entity_type = 'banner') {
+  $bundles = array('slide_tall', 'slide_short', 'banner_tall', 'banner_short');
+  $fields = array('field_paths');
+
+  foreach ($fields as $field_name) {
+    foreach ($bundles as $bundle_name) {
+      $instance = field_info_instance($entity_type, $bundle_name, $field_name);
+
+      field_delete_instance($instance);
+    }
+
+    field_delete_field('field_paths');
+  }
+}
